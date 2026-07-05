@@ -34,7 +34,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 // Resolve the public URL where cron-job.org should ping. Order of preference:
-//   1. KEEPER_URL (explicit, e.g. https://silentbid-zama.vercel.app)
+//   1. KEEPER_URL (explicit, e.g. https://obscura-zama.vercel.app)
 //   2. VERCEL_PROJECT_PRODUCTION_URL (Vercel auto-injects)
 //   3. host header (works for previews and local dev)
 function resolveBaseUrl(req: Request): string | null {

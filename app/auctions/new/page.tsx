@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { CreateAuctionForm } from "./create-auction-form"
 
 export const metadata: Metadata = {
-  title: "Create auction — SilentBid",
+  title: "Create auction — Obscura",
   description: "Create a new sealed-bid CCA auction.",
 }
 

@@ -4,13 +4,14 @@ Last updated: 2026-05-06
 
 ## ✅ Done
 
-### Contracts (live on Sepolia, all verified on Etherscan)
-- `MockUSDC` — `0xE9e7315988B5F0B7f4e50b64986947AE72B9D0B2`
-- `MockTokenX` — `0xb9eF338684ba9C5876E8708180C95e2D87FB6D44`
-- `ConfidentialUSDC` — `0x0a229d9E8CB39C4724deBFFF376acD23D102Fa83`
-- `Treasury` — `0x10692e22152330eF971A18129247CDbF776aA068`
-- `SilentBidAuction` — `0xa10314F70e90F8e12a8C6C6e5A2fbdb0f398D84c`
-- Deployer EOA: `0xf43F4FC18BaCEFE1C96e4FA6bdc8585FBAEd4Cf7` (Foundry keystore `default`, password `meow`)
+### Contracts (live on Sepolia) — REDEPLOYED 2026-07-05 with the TOKEN-mode fix
+- `MockUSDC` — `0x284f2a7c89FE5Ac3245108091d86A05e36c4a111`
+- `MockTokenX` — `0xc96A124100AA66159892047039aD1b60fB3558Cc`
+- `ConfidentialUSDC` — `0x7DDB59ad465Fc824BA6cAaD1848E8a34cDE63063`
+- `Treasury` — `0x5b6fCb37Bc3106c76DD6C921cb049c84691b345A`
+- `SilentBidAuction` — `0x5e053a9952c7bBc56332692e8848871a96584933` (positional-encoding TOKEN fix; `forge test` 15/15)
+- Deployer EOA: `0x08e187b4751D4D6B67C093aFC1B5d1843dC38163` (Foundry keystore `meow`, password `meow`)
+- Not yet Etherscan-verified. Prior set is orphaned (old auction `0xa10314F70e90F8e12a8C6C6e5A2fbdb0f398D84c`).
 - Foundry test suite: passing (Treasury, USDC/TokenX, ConfidentialUSDC w/ forge-fhevm)
 
 ### Frontend (Next.js 16 + wagmi + Zama relayer-sdk)
@@ -68,7 +69,9 @@ Settlement landed in **~2.5–3 min after endTime** for both, all driven by a si
 
 ## ❌ Remaining
 
-### Blocking TOKEN-mode auto-finalize (one contract redeploy)
+### ✅ RESOLVED 2026-07-05 — TOKEN-mode auto-finalize
+**Status**: fixed in `_verifyTokenDecryption` (positional `bytes.concat` encoding), `forge test` 15/15, redeployed (auction `0x5e053a9952c7bBc56332692e8848871a96584933`), keeper TOKEN branch re-enabled. Not yet validated by a live TOKEN e2e against the real KMS. Original diagnosis below for reference.
+
 **Bug**: `SilentBidAuction.sol:545` calls
 ```solidity
 FHE.checkSignatures(handles, abi.encode(cleartexts), decryptionProof);

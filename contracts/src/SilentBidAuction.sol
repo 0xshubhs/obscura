@@ -535,14 +535,22 @@ contract SilentBidAuction is ZamaEthereumConfig, ReentrancyGuard {
     ) internal {
         uint256 n = bidArr.length;
         bytes32[] memory handles = new bytes32[](n * 2);
-        uint256[] memory cleartexts = new uint256[](n * 2);
+        // The KMS signs the cleartexts as a POSITIONAL abi.encode — each value a
+        // fixed 32-byte word in handle order — exactly like finalizeAuctionItem's
+        // `abi.encode(uint256(winner), uint256(amount))`. Using abi.encode(uint256[])
+        // instead prepends a dynamic-array offset+length header the KMS never signed,
+        // so checkSignatures always reverts. Concatenate each word to match.
+        bytes memory cleartexts;
         for (uint256 i = 0; i < n; i++) {
             handles[i * 2] = FHE.toBytes32(bidArr[i].encPrice);
             handles[i * 2 + 1] = FHE.toBytes32(bidArr[i].encQty);
-            cleartexts[i * 2] = uint256(prices[i]);
-            cleartexts[i * 2 + 1] = uint256(qtys[i]);
+            cleartexts = bytes.concat(
+                cleartexts,
+                abi.encode(uint256(prices[i])),
+                abi.encode(uint256(qtys[i]))
+            );
         }
-        FHE.checkSignatures(handles, abi.encode(cleartexts), decryptionProof);
+        FHE.checkSignatures(handles, cleartexts, decryptionProof);
     }
 
     /// @dev Sorts bids by price desc, walks down until supply is exhausted.

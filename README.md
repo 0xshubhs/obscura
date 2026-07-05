@@ -1,4 +1,4 @@
-# SilentBID-ZAMA
+# Obscura
 
 Multi-winner sealed-bid uniform-clearing-price auction on **Zama FHEVM**. Bids stay encrypted on-chain throughout the bidding window — no one (not the seller, not other bidders, not validators) can see anyone's bid until settlement. At end of window, the contract reveals only the clearing price and winner allocations via Zama's KMS-signed public decryption.
 
@@ -25,7 +25,7 @@ A spiritual port of [SilentBID-FHENIX](../Silentbid-FHENIX/) onto the Zama stack
 ## Layout
 
 ```
-SilentBID-ZAMA/
+Obscura/
 ├── contracts/                   Foundry project
 │   ├── src/
 │   │   ├── MockUSDC.sol         6-decimal underlying, faucet (≤1000/call)
@@ -182,12 +182,14 @@ curl -X POST -H "Content-Type: application/json" \
 ```
 
 **Limitations:**
-- ITEM mode only. TOKEN mode is disabled in the keeper because the deployed
-  contract encodes the cleartext array as `abi.encode(uint256[])` (dynamic
-  array) but the relayer hands back positional `abi.encode(uint256, uint256, …)`
-  — they don't match. Fix is in `_verifyTokenDecryption` at
-  `contracts/src/SilentBidAuction.sol:530-546`. Until redeployed, TOKEN-mode
-  auctions still need the manual finalize button.
+- TOKEN-mode finalize was previously blocked by a cleartext-encoding mismatch:
+  the contract encoded the cleartexts as `abi.encode(uint256[])` (dynamic array)
+  but the KMS signs positional `abi.encode(uint256, uint256, …)`. **Fixed** in
+  `_verifyTokenDecryption` (`contracts/src/SilentBidAuction.sol`) — it now builds
+  the positional encoding via `bytes.concat`, mirroring `finalizeAuctionItem`.
+  Verified by `forge test` (15/15), deployed to the current auction, and the
+  keeper's TOKEN branch is re-enabled. (The manual finalize button remains as a
+  fallback.)
 - cron-job.org free tier caps you at 50 active jobs. Each auction uses
   TWO slots (endAuction + finalize one-shots), so the practical ceiling is
   ~25 simultaneously-pending auctions. Auto-expiry (10 min past fire) keeps

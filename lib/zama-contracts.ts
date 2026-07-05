@@ -1,5 +1,5 @@
 /**
- * Contract address registry + ABIs for the Zama port of SilentBid.
+ * Contract address registry + ABIs for Obscura (Zama sealed-bid auction).
  * Mirrors the FHENIX `lib/fhenix-contracts.ts` export shape, adapted for the
  * relayer-sdk calling convention (bytes32 handle + bytes inputProof) and the
  * dual ITEM/TOKEN auction modes.
@@ -7,16 +7,16 @@
 import { type Abi, type Address } from "viem"
 
 // Next.js webpack only replaces *literal* property access on process.env at
-// compile time. Dynamic keys like process.env[k] do NOT get replaced and
-// return undefined in the browser bundle — every address would silently
-// resolve to the zero address. Always reference each var by literal name.
-const ZERO = "0x0000000000000000000000000000000000000000" as const
-
-export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS || ZERO) as Address
-export const CUSDC_ADDRESS = (process.env.NEXT_PUBLIC_CUSDC_ADDRESS || ZERO) as Address
-export const AUCTION_ADDRESS = (process.env.NEXT_PUBLIC_AUCTION_ADDRESS || ZERO) as Address
-export const TREASURY_ADDRESS = (process.env.NEXT_PUBLIC_TREASURY_ADDRESS || ZERO) as Address
-export const TOKENX_ADDRESS = (process.env.NEXT_PUBLIC_TOKENX_ADDRESS || ZERO) as Address
+// compile time. Dynamic keys like process.env[k] do NOT get replaced and return
+// undefined in the browser bundle. Always reference each var by literal name.
+// The hardcoded fallback is the live Ethereum Sepolia deployment (2026-07-05,
+// with the TOKEN-mode fix) so the app works without a .env.local; env still
+// overrides when present.
+export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS || "0x284f2a7c89FE5Ac3245108091d86A05e36c4a111") as Address
+export const CUSDC_ADDRESS = (process.env.NEXT_PUBLIC_CUSDC_ADDRESS || "0x7DDB59ad465Fc824BA6cAaD1848E8a34cDE63063") as Address
+export const AUCTION_ADDRESS = (process.env.NEXT_PUBLIC_AUCTION_ADDRESS || "0x5e053a9952c7bBc56332692e8848871a96584933") as Address
+export const TREASURY_ADDRESS = (process.env.NEXT_PUBLIC_TREASURY_ADDRESS || "0x5b6fCb37Bc3106c76DD6C921cb049c84691b345A") as Address
+export const TOKENX_ADDRESS = (process.env.NEXT_PUBLIC_TOKENX_ADDRESS || "0xc96A124100AA66159892047039aD1b60fB3558Cc") as Address
 
 export const USDC_DECIMALS = 6
 export const SCALE = 1_000_000n

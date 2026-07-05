@@ -145,14 +145,14 @@ export async function scheduleAuctionFinalize(opts: {
   // Sequential, not parallel — cron-job.org's API rate-limits bursts.
   const endJobId = await createOneShot({
     url,
-    title: `silentbid-end-${auctionId}`,
+    title: `obscura-end-${auctionId}`,
     fireAt: endFireAt,
     cronSecret,
     apiKey,
   })
   const finalizeJobId = await createOneShot({
     url,
-    title: `silentbid-finalize-${auctionId}`,
+    title: `obscura-finalize-${auctionId}`,
     fireAt: finalizeFireAt,
     cronSecret,
     apiKey,

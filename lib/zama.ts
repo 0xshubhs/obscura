@@ -331,7 +331,7 @@ function toHexHandle(h: bigint | string): `0x${string}` {
 /**
  * The KMS may hand back booleans (eboolDecrypt), bigints (e[u]intN decrypt),
  * or `0x...` hex (eaddress / encrypted bytes). We coerce everything to bigint
- * because the SilentBid surface only deals in uint64 amounts + addresses.
+ * because the Obscura surface only deals in uint64 amounts + addresses.
  * Hex values are interpreted as big-endian unsigned integers; booleans become
  * 0n / 1n.
  */

@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
-export function SilentBidLogo({ className }: { className?: string }) {
+export function ObscuraLogo({ className }: { className?: string }) {
   return (
     <Link
       href="/"
@@ -9,7 +9,7 @@ export function SilentBidLogo({ className }: { className?: string }) {
         "inline-flex items-center gap-2 group focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         className,
       )}
-      aria-label="SilentBid — Home"
+      aria-label="Obscura — Home"
     >
       {/* Logo: teardrop (pool) + wax seal */}
       <span className="flex items-center justify-center w-9 h-9 border border-current text-muted-foreground group-hover:text-accent group-hover:border-accent transition-colors">
@@ -40,7 +40,7 @@ export function SilentBidLogo({ className }: { className?: string }) {
         </svg>
       </span>
       <span className="font-[var(--font-bebas)] text-xl tracking-tight text-foreground group-hover:text-accent transition-colors">
-        SilentBid
+        Obscura
       </span>
     </Link>
   )

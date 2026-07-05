@@ -150,13 +150,71 @@ async function processAuction(
 
   // Transition 2: ended → finalized.
   if (a.mode === "TOKEN") {
-    // Disabled until contract is redeployed with positional cleartext encoding;
-    // see SilentBidAuction.sol:_verifyTokenDecryption.
-    out.push({
-      auctionId: id.toString(),
-      action: "skip-token",
-      error: "TOKEN-mode finalize disabled in keeper (contract encoding mismatch — see README)",
-    })
+    // Re-enabled after the auction was redeployed with the positional cleartext
+    // encoding fix in SilentBidAuction._verifyTokenDecryption. The KMS signs the
+    // cleartexts as fixed 32-byte words in handle order, and the contract now
+    // rebuilds them the same way, so checkSignatures verifies.
+    try {
+      const inst = await getZama()
+
+      // Read every bid's (encPrice, encQty) handles in bid order. The contract's
+      // _verifyTokenDecryption reconstructs handles as [price_0, qty_0, price_1,
+      // qty_1, ...], so we decrypt and submit prices[]/qtys[] in that same order.
+      const nBids = (await publicClient.readContract({
+        address: AUCTION_ADDRESS,
+        abi: AUCTION_ABI,
+        functionName: "bidCount",
+        args: [id],
+      })) as bigint
+
+      const priceHandles: `0x${string}`[] = []
+      const qtyHandles: `0x${string}`[] = []
+      for (let i = 0n; i < nBids; i++) {
+        const bid = (await publicClient.readContract({
+          address: AUCTION_ADDRESS,
+          abi: AUCTION_ABI,
+          functionName: "getBid",
+          args: [id, i],
+        })) as readonly [Address, `0x${string}`, `0x${string}`, `0x${string}`, boolean, bigint, bigint]
+        priceHandles.push(bid[1].toLowerCase() as `0x${string}`)
+        qtyHandles.push(bid[2].toLowerCase() as `0x${string}`)
+      }
+
+      // One publicDecrypt over all handles interleaved [price_0, qty_0, ...] —
+      // this is what the KMS signs, and the proof covers every handle at once.
+      const allHandles = priceHandles.flatMap((p, i) => [p, qtyHandles[i]])
+      const r = await inst.publicDecrypt(allHandles)
+
+      const toBig = (v: unknown) => (typeof v === "bigint" ? v : BigInt(v as string))
+      const readClear = (h: `0x${string}`, label: string) => {
+        const v = r.clearValues[h]
+        if (v === undefined) throw new Error(`relayer returned no plaintext for ${label} handle`)
+        return toBig(v)
+      }
+      const prices = priceHandles.map((h) => readClear(h, "price"))
+      const qtys = qtyHandles.map((h) => readClear(h, "qty"))
+
+      const hash = await walletClient.writeContract({
+        address: AUCTION_ADDRESS,
+        abi: AUCTION_ABI,
+        functionName: "finalizeAuctionToken",
+        args: [id, prices, qtys, r.decryptionProof],
+        gas: 12_000_000n,
+        account,
+        chain: sepolia,
+      })
+      await publicClient.waitForTransactionReceipt({ hash })
+      out.push({ auctionId: id.toString(), action: "finalizeAuctionToken", tx: hash })
+    } catch (e) {
+      const msg = (e as Error).message.slice(0, 300)
+      out.push({
+        auctionId: id.toString(),
+        action: msg.includes("404") || msg.toLowerCase().includes("not found")
+          ? "skip-pending-relayer"
+          : "finalizeAuctionToken",
+        error: msg,
+      })
+    }
     return out
   }
 

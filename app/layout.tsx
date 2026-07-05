@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SilentBid - Zama FHE Sealed-Bid Auctions",
+  title: "Obscura - Zama FHE Sealed-Bid Auctions",
   description:
     "Sealed-bid auctions on Sepolia powered by Zama FHE relayer-sdk. Bids stay encrypted end-to-end, with on-chain FHE max computation and confidential cUSDC escrow.",
 };

@@ -56,7 +56,7 @@ export function HeroSection() {
         </SplitFlapAudioProvider>
 
         <h2 className="font-[var(--font-bebas)] text-muted-foreground/60 text-[clamp(1rem,3vw,2rem)] mt-4 tracking-wide">
-          FHE-Native Sealed-Bid Auctions on Base
+          FHE-Native Sealed-Bid Auctions on Ethereum Sepolia
         </h2>
 
         <p className="mt-12 max-w-md font-mono text-sm text-muted-foreground leading-relaxed">

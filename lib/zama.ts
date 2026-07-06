@@ -67,7 +67,7 @@ async function getOrCreateInstance(): Promise<FhevmInstance> {
       // the host chain (chainId 11155111).
       //
       // Always use a Sepolia RPC URL — never `window.ethereum`. The injected
-      // wallet may be on a different chain (e.g. Base Sepolia from a prior
+      // wallet may be on a different chain (e.g. another network from a prior
       // session); reading state through it would return `0x` for every
       // Zama-host call and produce a misleading "could not decode result data
       // (eip712Domain)" error. Wallet signing for tx broadcast is unaffected

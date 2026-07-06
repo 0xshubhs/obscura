@@ -1,8 +1,11 @@
 forge-std/=lib/forge-std/src/
 forge-fhevm/=lib/forge-fhevm/src/
 @fhevm/solidity/=lib/forge-fhevm/dependencies/@fhevm-solidity-0.11.1/
-@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+@openzeppelin/contracts/=lib/forge-fhevm/dependencies/@openzeppelin-contracts-5.1.0/
 @openzeppelin-contracts/=lib/forge-fhevm/dependencies/@openzeppelin-contracts-5.1.0/
 @openzeppelin-contracts-upgradeable/=lib/forge-fhevm/dependencies/@openzeppelin-contracts-upgradeable-5.1.0/
 @openzeppelin/confidential-contracts/=lib/forge-fhevm/dependencies/@openzeppelin-confidential-contracts-6edd293/contracts/
 @encrypted-types/=lib/forge-fhevm/dependencies/@encrypted-types-0.0.4/
+@openzeppelin/contracts-upgradeable/=lib/forge-fhevm/dependencies/@openzeppelin-contracts-upgradeable-5.1.0/
+@fhevm/host-contracts/=lib/forge-fhevm/src/fhevm-host/
+encrypted-types/=lib/forge-fhevm/dependencies/@encrypted-types-0.0.4/

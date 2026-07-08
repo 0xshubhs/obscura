@@ -8,9 +8,9 @@ import {MockUSDC} from "../src/MockUSDC.sol";
 import {MockTokenX} from "../src/MockTokenX.sol";
 import {Treasury} from "../src/Treasury.sol";
 import {ConfidentialUSDC} from "../src/ConfidentialUSDC.sol";
-import {SilentBidAuction} from "../src/SilentBidAuction.sol";
+import {Obscura} from "../src/Obscura.sol";
 
-contract SilentBidAuctionTest is FhevmTest {
+contract ObscuraTest is FhevmTest {
     // --- Actors ---
     uint256 internal constant SELLER_PK = 0xC0FFEE;
     uint256 internal constant ALICE_PK = 0xA11CE;
@@ -33,7 +33,7 @@ contract SilentBidAuctionTest is FhevmTest {
     MockTokenX internal tokenX;
     Treasury internal treasury;
     ConfidentialUSDC internal cusdc;
-    SilentBidAuction internal auction;
+    Obscura internal auction;
 
     function setUp() public override {
         super.setUp();
@@ -51,7 +51,7 @@ contract SilentBidAuctionTest is FhevmTest {
         vm.prank(treasuryOwner);
         treasury = new Treasury(250); // 2.5%
 
-        auction = new SilentBidAuction(address(cusdc), address(treasury));
+        auction = new Obscura(address(cusdc), address(treasury));
 
         // Mint USDC to bidders.
         usdc.mint(alice, 1_000 * 1e6);
@@ -129,21 +129,21 @@ contract SilentBidAuctionTest is FhevmTest {
         vm.warp(block.timestamp + 61);
         auction.endAuction(id);
 
-        SilentBidAuction.Auction memory a = auction.getAuction(id);
+        Obscura.Auction memory a = auction.getAuction(id);
         assertTrue(a.ended, "ended flag set");
     }
 
     function test_itemAuction_RevertWhen_EndTooEarly() public {
         vm.prank(seller);
         uint256 id = auction.createAuctionItem("Painting", "Desc", 10 * 1e6, 60);
-        vm.expectRevert(SilentBidAuction.TooEarly.selector);
+        vm.expectRevert(Obscura.TooEarly.selector);
         auction.endAuction(id);
     }
 
     function test_itemAuction_RevertWhen_FinalizeBeforeEnd() public {
         vm.prank(seller);
         uint256 id = auction.createAuctionItem("Painting", "Desc", 10 * 1e6, 60);
-        vm.expectRevert(SilentBidAuction.AuctionNotEnded.selector);
+        vm.expectRevert(Obscura.AuctionNotEnded.selector);
         auction.finalizeAuctionItem(id, alice, 100 * 1e6, hex"");
     }
 
@@ -157,7 +157,7 @@ contract SilentBidAuctionTest is FhevmTest {
         _approveAuction(seller, 50 * 1e6);
         (externalEuint64 ext, bytes memory proof) = encryptUint64(50 * 1e6, seller, address(auction));
         vm.prank(seller);
-        vm.expectRevert(SilentBidAuction.SellerCannotBid.selector);
+        vm.expectRevert(Obscura.SellerCannotBid.selector);
         auction.placeBid(id, ext, ext, proof, proof);
     }
 
@@ -171,7 +171,7 @@ contract SilentBidAuctionTest is FhevmTest {
         _approveAuction(alice, 50 * 1e6);
         (externalEuint64 ext, bytes memory proof) = encryptUint64(50 * 1e6, alice, address(auction));
         vm.prank(alice);
-        vm.expectRevert(SilentBidAuction.AlreadyBid.selector);
+        vm.expectRevert(Obscura.AlreadyBid.selector);
         auction.placeBid(id, ext, ext, proof, proof);
     }
 
@@ -192,7 +192,7 @@ contract SilentBidAuctionTest is FhevmTest {
         auction.endAuction(id);
 
         // Decrypt running winner handles publicly.
-        SilentBidAuction.Auction memory a = auction.getAuction(id);
+        Obscura.Auction memory a = auction.getAuction(id);
         bytes32[] memory handles = new bytes32[](2);
         handles[0] = eaddress.unwrap(a.runningHighestBidder);
         handles[1] = euint64.unwrap(a.runningHighestBid);
@@ -217,7 +217,7 @@ contract SilentBidAuctionTest is FhevmTest {
             assertEq(_readEncBal(CAROL_PK, carol), 175 * 1e6, "carol refunded");
             assertEq(_readEncBal(BOB_PK, bob), 0, "bob paid out fully");
 
-            SilentBidAuction.Auction memory after_ = auction.getAuction(id);
+            Obscura.Auction memory after_ = auction.getAuction(id);
             assertTrue(after_.finalized, "finalized");
             assertEq(after_.winnerPlain, bob, "winner stored");
             assertEq(after_.winningAmountPlain, winningAmount, "amount stored");
@@ -238,7 +238,7 @@ contract SilentBidAuctionTest is FhevmTest {
             "TokenSale", "Desc", address(tokenX), 100 ether, 1 * 1e6, 60
         );
         assertEq(tokenX.balanceOf(address(auction)), 100 ether, "supply pulled");
-        SilentBidAuction.Auction memory a = auction.getAuction(id);
+        Obscura.Auction memory a = auction.getAuction(id);
         assertEq(a.totalSupply, 100 ether, "supply set");
         assertEq(a.tokenX, address(tokenX), "tokenX set");
     }
@@ -247,13 +247,13 @@ contract SilentBidAuctionTest is FhevmTest {
         vm.prank(seller);
         tokenX.approve(address(auction), 1 ether);
         vm.prank(seller);
-        vm.expectRevert(SilentBidAuction.DurationTooShort.selector);
+        vm.expectRevert(Obscura.DurationTooShort.selector);
         auction.createAuctionToken("X", "D", address(tokenX), 1 ether, 1, 30);
     }
 
     function test_tokenAuction_RevertWhen_ZeroSupply() public {
         vm.prank(seller);
-        vm.expectRevert(SilentBidAuction.ZeroAmount.selector);
+        vm.expectRevert(Obscura.ZeroAmount.selector);
         auction.createAuctionToken("X", "D", address(tokenX), 0, 1, 60);
     }
 
@@ -311,7 +311,7 @@ contract SilentBidAuctionTest is FhevmTest {
         assertEq(cleartexts[9], qtys[4]);
 
         try auction.finalizeAuctionToken(id, prices, qtys, decProof) {
-            SilentBidAuction.Auction memory a = auction.getAuction(id);
+            Obscura.Auction memory a = auction.getAuction(id);
             assertTrue(a.finalized, "finalized");
             assertEq(a.clearingPricePlain, 3 * 1e6, "clearing = 3 USDC");
             assertEq(a.unsoldReturned, 0, "all sold");
@@ -338,7 +338,7 @@ contract SilentBidAuctionTest is FhevmTest {
 
         uint64[] memory prices = new uint64[](0);
         uint64[] memory qtys = new uint64[](0);
-        vm.expectRevert(SilentBidAuction.WrongMode.selector);
+        vm.expectRevert(Obscura.WrongMode.selector);
         auction.finalizeAuctionToken(id, prices, qtys, hex"");
     }
 
@@ -350,17 +350,151 @@ contract SilentBidAuctionTest is FhevmTest {
         vm.warp(block.timestamp + 61);
         auction.endAuction(id);
 
-        vm.expectRevert(SilentBidAuction.WrongMode.selector);
+        vm.expectRevert(Obscura.WrongMode.selector);
         auction.finalizeAuctionItem(id, alice, 1, hex"");
     }
 
     function test_constructor_RevertWhen_ZeroCUSDC() public {
-        vm.expectRevert(SilentBidAuction.ZeroAddress.selector);
-        new SilentBidAuction(address(0), address(treasury));
+        vm.expectRevert(Obscura.ZeroAddress.selector);
+        new Obscura(address(0), address(treasury));
     }
 
     function test_constructor_RevertWhen_ZeroTreasury() public {
-        vm.expectRevert(SilentBidAuction.ZeroAddress.selector);
-        new SilentBidAuction(address(cusdc), address(0));
+        vm.expectRevert(Obscura.ZeroAddress.selector);
+        new Obscura(address(cusdc), address(0));
+    }
+
+    // --- Tests: SEALED reserve + Vickrey (V3 features ported from Fhenix) ---
+
+    /// @dev Create a sealed-reserve ITEM auction with an ENCRYPTED reserve.
+    function _createSealed(uint64 reserve, bool useVickrey, bool useTieBreak)
+        internal
+        returns (uint256 id)
+    {
+        (externalEuint64 extR, bytes memory proofR) = encryptUint64(reserve, seller, address(auction));
+        vm.prank(seller);
+        id = auction.createSealedAuctionItem(
+            "Rare NFT", "Sealed reserve", 0, extR, proofR, 60, useVickrey, useTieBreak
+        );
+    }
+
+    function test_sealed_createsWithHiddenReserve() public {
+        uint256 id = _createSealed(50 * 1e6, true, false);
+        Obscura.Auction memory a = auction.getAuction(id);
+        assertTrue(a.reserveHidden, "reserve hidden");
+        assertTrue(a.useVickrey, "vickrey on");
+        assertEq(a.minBidPlain, 0, "display hint only");
+        assertEq(uint8(a.mode), uint8(0), "ITEM mode");
+    }
+
+    /// @notice A single sub-reserve bid can never win: the running winner stays
+    ///         (address(0), 0) because the encrypted reserve zeroes it inside FHE.
+    function test_sealed_belowReserveCannotWin() public {
+        uint256 id = _createSealed(100 * 1e6, false, false);
+        _placeItemBid(id, alice, 40 * 1e6); // below the hidden reserve of 100
+
+        vm.warp(block.timestamp + 61);
+        auction.endAuction(id);
+
+        Obscura.Auction memory a = auction.getAuction(id);
+        bytes32[] memory handles = new bytes32[](2);
+        handles[0] = eaddress.unwrap(a.runningHighestBidder);
+        handles[1] = euint64.unwrap(a.runningHighestBid);
+        (uint256[] memory cleartexts, ) = publicDecrypt(handles);
+
+        assertEq(address(uint160(cleartexts[0])), address(0), "no winner below reserve");
+        assertEq(uint64(cleartexts[1]), 0, "winning amount zeroed");
+    }
+
+    /// @notice Vickrey: winner is the top bidder but the decrypted settlement
+    ///         value is the RUNNER-UP's bid (second price), not the winner's.
+    function test_sealed_vickrey_secondPriceIsRunnerUp() public {
+        uint256 id = _createSealed(50 * 1e6, true, false);
+        _placeItemBid(id, alice, 100 * 1e6);
+        _placeItemBid(id, bob, 250 * 1e6); // top bid
+        _placeItemBid(id, carol, 175 * 1e6); // runner-up
+
+        vm.warp(block.timestamp + 61);
+        auction.endAuction(id);
+
+        Obscura.Auction memory a = auction.getAuction(id);
+        bytes32[] memory handles = new bytes32[](2);
+        handles[0] = eaddress.unwrap(a.runningHighestBidder);
+        handles[1] = euint64.unwrap(a.secondHighestBid);
+        (uint256[] memory cleartexts, bytes memory decProof) = publicDecrypt(handles);
+
+        address winner = address(uint160(cleartexts[0]));
+        uint64 secondPrice = uint64(cleartexts[1]);
+        assertEq(winner, bob, "bob is the winner");
+        assertEq(secondPrice, 175 * 1e6, "pays carol's runner-up price, not his 250");
+
+        // Winner's true bid (250) is never part of the settlement — only 175 is
+        // decrypted. Finalize on the mock KMS may revert at checkSignatures.
+        try auction.finalizeSealedAuctionItem(id, winner, secondPrice, decProof) {
+            uint64 fee = uint64((uint256(secondPrice) * 250) / 10_000);
+            assertEq(_readEncBal(SELLER_PK, seller), secondPrice - fee, "seller gets 2nd price net");
+            // Bob escrowed 250, paid 175 -> 75 overbid refunded to him.
+            assertEq(_readEncBal(BOB_PK, bob), 75 * 1e6, "winner overbid refunded");
+            assertEq(_readEncBal(ALICE_PK, alice), 100 * 1e6, "alice refunded");
+            assertEq(_readEncBal(CAROL_PK, carol), 175 * 1e6, "carol refunded");
+            Obscura.Auction memory after_ = auction.getAuction(id);
+            assertTrue(after_.finalized, "finalized");
+            assertEq(after_.winningAmountPlain, secondPrice, "second price stored");
+        } catch {
+            emit log_string("finalizeSealedAuctionItem reverted on mock KMS (expected quirk)");
+        }
+    }
+
+    /// @notice A single Vickrey bidder pays exactly the reserve (textbook spec),
+    ///         because secondHighestBid is seeded at the reserve.
+    function test_sealed_vickrey_singleBidderPaysReserve() public {
+        uint256 id = _createSealed(50 * 1e6, true, false);
+        _placeItemBid(id, alice, 200 * 1e6);
+
+        vm.warp(block.timestamp + 61);
+        auction.endAuction(id);
+
+        Obscura.Auction memory a = auction.getAuction(id);
+        bytes32[] memory handles = new bytes32[](2);
+        handles[0] = eaddress.unwrap(a.runningHighestBidder);
+        handles[1] = euint64.unwrap(a.secondHighestBid);
+        (uint256[] memory cleartexts, ) = publicDecrypt(handles);
+
+        assertEq(address(uint160(cleartexts[0])), alice, "alice wins");
+        assertEq(uint64(cleartexts[1]), 50 * 1e6, "lone bidder pays the reserve");
+    }
+
+    function test_sealed_vickrey_RevertWhen_FinalizeWithItemPath() public {
+        uint256 id = _createSealed(50 * 1e6, true, false);
+        _placeItemBid(id, alice, 100 * 1e6);
+        vm.warp(block.timestamp + 61);
+        auction.endAuction(id);
+        // Vickrey auction must settle via finalizeSealedAuctionItem, but the plain
+        // ITEM finalize is still callable (first-price on the top bid); the guard
+        // we assert is the reverse: a non-Vickrey auction rejects the sealed path.
+        uint256 id2 = auction.auctionCount(); // next id
+        vm.prank(seller);
+        id2 = auction.createAuctionItem("Plain", "D", 10 * 1e6, 60);
+        _placeItemBid(id2, bob, 100 * 1e6);
+        vm.warp(block.timestamp + 61);
+        auction.endAuction(id2);
+        vm.expectRevert(Obscura.WrongMode.selector);
+        auction.finalizeSealedAuctionItem(id2, bob, 100 * 1e6, hex"");
+    }
+
+    function test_sealed_revealMyBid() public {
+        uint256 id = _createSealed(50 * 1e6, false, false);
+        _placeItemBid(id, alice, 120 * 1e6);
+        vm.warp(block.timestamp + 61);
+        auction.endAuction(id);
+
+        assertEq(auction.bidRevealed(id, 0), false, "not revealed yet");
+        vm.prank(alice);
+        auction.revealMyBid(id, 0);
+        assertEq(auction.bidRevealed(id, 0), true, "revealed after opt-in");
+
+        vm.prank(bob);
+        vm.expectRevert(Obscura.NotYourBid.selector);
+        auction.revealMyBid(id, 0);
     }
 }

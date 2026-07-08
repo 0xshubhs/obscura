@@ -99,7 +99,7 @@ export const TREASURY_ABI: Abi = [
   { type: "function", name: "transferOwnership", stateMutability: "nonpayable", inputs: [{ name: "newOwner", type: "address" }], outputs: [] },
 ]
 
-// SilentBidAuction — see contracts/src/SilentBidAuction.sol for the canonical
+// Obscura — see contracts/src/Obscura.sol for the canonical
 // definition. The struct returned by `getAuction` is exposed as a tuple so the
 // shape matches what we build into `AuctionData` below.
 const AUCTION_STRUCT_FIELDS = [
@@ -121,6 +121,13 @@ const AUCTION_STRUCT_FIELDS = [
   { name: "clearingPricePlain", type: "uint64" },
   { name: "unsoldReturned", type: "uint256" },
   { name: "gasDeposit", type: "uint256" },
+  // Sealed / Vickrey / tie-break fields (appended to the on-chain struct).
+  { name: "bidGasPool", type: "uint256" },
+  { name: "reserveHidden", type: "bool" },
+  { name: "useVickrey", type: "bool" },
+  { name: "useTieBreak", type: "bool" },
+  { name: "secondHighestBid", type: "bytes32" },
+  { name: "tieBreakScore", type: "bytes32" },
 ] as const
 
 export const AUCTION_ABI: Abi = [
@@ -147,6 +154,20 @@ export const AUCTION_ABI: Abi = [
     outputs: [{ type: "uint256" }],
   },
   {
+    type: "function", name: "createSealedAuctionItem", stateMutability: "payable",
+    inputs: [
+      { name: "itemName", type: "string" },
+      { name: "itemDescription", type: "string" },
+      { name: "displayHint", type: "uint64" },
+      { name: "encReserve", type: "bytes32" },
+      { name: "reserveProof", type: "bytes" },
+      { name: "durationSeconds", type: "uint64" },
+      { name: "useVickrey", type: "bool" },
+      { name: "useTieBreak", type: "bool" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
     type: "function", name: "placeBid", stateMutability: "payable",
     inputs: [
       { name: "auctionId", type: "uint256" },
@@ -158,6 +179,26 @@ export const AUCTION_ABI: Abi = [
     outputs: [{ type: "uint256" }],
   },
   { type: "function", name: "endAuction", stateMutability: "nonpayable", inputs: [{ name: "auctionId", type: "uint256" }], outputs: [] },
+  {
+    type: "function", name: "finalizeSealedAuctionItem", stateMutability: "nonpayable",
+    inputs: [
+      { name: "auctionId", type: "uint256" },
+      { name: "winner", type: "address" },
+      { name: "paidAmount", type: "uint64" },
+      { name: "decryptionProof", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function", name: "revealMyBid", stateMutability: "nonpayable",
+    inputs: [{ name: "auctionId", type: "uint256" }, { name: "bidIndex", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function", name: "bidRevealed", stateMutability: "view",
+    inputs: [{ name: "auctionId", type: "uint256" }, { name: "bidIndex", type: "uint256" }],
+    outputs: [{ type: "bool" }],
+  },
   {
     type: "function", name: "finalizeAuctionItem", stateMutability: "nonpayable",
     inputs: [
@@ -197,6 +238,7 @@ export const AUCTION_ABI: Abi = [
       { name: "settled", type: "bool" },
       { name: "allocatedTokenX", type: "uint256" },
       { name: "refundedCUSDC", type: "uint64" },
+      { name: "revealed", type: "bool" },
     ],
   },
   {
@@ -234,12 +276,39 @@ export const AUCTION_ABI: Abi = [
   },
   { type: "event", name: "AuctionEnded", inputs: [{ name: "auctionId", type: "uint256", indexed: true }] },
   {
+    type: "event", name: "SealedAuctionCreated",
+    inputs: [
+      { name: "auctionId", type: "uint256", indexed: true },
+      { name: "useVickrey", type: "bool", indexed: false },
+      { name: "useTieBreak", type: "bool", indexed: false },
+      { name: "displayHint", type: "uint64", indexed: false },
+    ],
+  },
+  {
     type: "event", name: "AuctionFinalizedItem",
     inputs: [
       { name: "auctionId", type: "uint256", indexed: true },
       { name: "winner", type: "address", indexed: true },
       { name: "amount", type: "uint64", indexed: false },
       { name: "fee", type: "uint64", indexed: false },
+    ],
+  },
+  {
+    type: "event", name: "AuctionFinalizedVickrey",
+    inputs: [
+      { name: "auctionId", type: "uint256", indexed: true },
+      { name: "winner", type: "address", indexed: true },
+      { name: "paidAmount", type: "uint64", indexed: false },
+      { name: "fee", type: "uint64", indexed: false },
+    ],
+  },
+  {
+    type: "event", name: "BidRevealed",
+    inputs: [
+      { name: "auctionId", type: "uint256", indexed: true },
+      { name: "bidIndex", type: "uint256", indexed: true },
+      { name: "bidder", type: "address", indexed: true },
+      { name: "encPriceHandle", type: "bytes32", indexed: false },
     ],
   },
   {
@@ -280,6 +349,12 @@ export type AuctionData = {
   clearingPricePlain: bigint
   unsoldReturned: bigint
   gasDeposit: bigint
+  // Sealed / Vickrey / tie-break (opt-in via createSealedAuctionItem).
+  bidGasPool: bigint
+  reserveHidden: boolean
+  useVickrey: boolean
+  useTieBreak: boolean
+  secondHighestBidHandle: string
   // numBids is read separately via `bidCount` — included on AuctionData for
   // convenience to the UI that already mutates it post-fetch.
   numBids: bigint
@@ -328,6 +403,11 @@ export function parseAuctionTuple(raw: unknown, id: bigint): AuctionData {
     clearingPricePlain: bigint
     unsoldReturned: bigint
     gasDeposit: bigint
+    bidGasPool: bigint
+    reserveHidden: boolean
+    useVickrey: boolean
+    useTieBreak: boolean
+    secondHighestBid: string
   }
   return {
     id,
@@ -348,6 +428,11 @@ export function parseAuctionTuple(raw: unknown, id: bigint): AuctionData {
     clearingPricePlain: v.clearingPricePlain,
     unsoldReturned: v.unsoldReturned,
     gasDeposit: v.gasDeposit,
+    bidGasPool: v.bidGasPool,
+    reserveHidden: v.reserveHidden,
+    useVickrey: v.useVickrey,
+    useTieBreak: v.useTieBreak,
+    secondHighestBidHandle: v.secondHighestBid,
     numBids: 0n,
   }
 }

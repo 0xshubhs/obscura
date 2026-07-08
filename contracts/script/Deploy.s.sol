@@ -6,7 +6,7 @@ import {MockUSDC} from "../src/MockUSDC.sol";
 import {MockTokenX} from "../src/MockTokenX.sol";
 import {Treasury} from "../src/Treasury.sol";
 import {ConfidentialUSDC} from "../src/ConfidentialUSDC.sol";
-import {SilentBidAuction} from "../src/SilentBidAuction.sol";
+import {Obscura} from "../src/Obscura.sol";
 
 /// @notice Deploy script for SilentBID-ZAMA on Sepolia FHEVM (chainId 11155111).
 ///         Run: `forge script script/Deploy.s.sol --rpc-url sepolia --broadcast --private-key $PRIVATE_KEY`
@@ -29,8 +29,8 @@ contract DeployScript is Script {
         Treasury treasury = new Treasury(250); // 2.5% fee
         console2.log("Treasury:", address(treasury));
 
-        SilentBidAuction auction = new SilentBidAuction(address(cusdc), address(treasury));
-        console2.log("SilentBidAuction:", address(auction));
+        Obscura auction = new Obscura(address(cusdc), address(treasury));
+        console2.log("Obscura:", address(auction));
 
         treasury.authorizeContract(address(auction));
         console2.log("Authorized auction in Treasury");

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-/// @notice Plaintext-only treasury for collecting platform fees from SilentBidAuction.
+/// @notice Plaintext-only treasury for collecting platform fees from Obscura.
 ///         Mirrors the FHENIX Treasury: owner-controlled fee bps (cap 10%), authorized
 ///         contract whitelist, and an ETH withdraw path. The encrypted fee transfer
 ///         happens in the auction contract via cUSDC, not here.

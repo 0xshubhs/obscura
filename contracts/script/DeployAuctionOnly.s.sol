@@ -3,9 +3,9 @@ pragma solidity ^0.8.27;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {Treasury} from "../src/Treasury.sol";
-import {SilentBidAuction} from "../src/SilentBidAuction.sol";
+import {Obscura} from "../src/Obscura.sol";
 
-/// @notice Redeploy ONLY SilentBidAuction — carrying the fixed TOKEN-mode
+/// @notice Redeploy ONLY the Obscura auction — carrying the fixed TOKEN-mode
 ///         positional cleartext encoding in `_verifyTokenDecryption` — while
 ///         reusing the already-deployed ConfidentialUSDC + Treasury so existing
 ///         cUSDC balances and treasury config are preserved.
@@ -21,8 +21,8 @@ contract DeployAuctionOnly is Script {
 
         vm.startBroadcast();
 
-        SilentBidAuction auction = new SilentBidAuction(CUSDC, TREASURY);
-        console2.log("New SilentBidAuction:", address(auction));
+        Obscura auction = new Obscura(CUSDC, TREASURY);
+        console2.log("New Obscura:", address(auction));
 
         // Treasury.authorizeContract is onlyOwner; the deployer is the owner.
         Treasury(payable(TREASURY)).authorizeContract(address(auction));

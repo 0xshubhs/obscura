@@ -72,6 +72,7 @@ type ActionResult = {
   action:
     | "endAuction"
     | "finalizeAuctionItem"
+    | "finalizeSealedAuctionItem"
     | "finalizeAuctionToken"
     | "skip-live"
     | "skip-finalized"
@@ -151,7 +152,7 @@ async function processAuction(
   // Transition 2: ended → finalized.
   if (a.mode === "TOKEN") {
     // Re-enabled after the auction was redeployed with the positional cleartext
-    // encoding fix in SilentBidAuction._verifyTokenDecryption. The KMS signs the
+    // encoding fix in Obscura._verifyTokenDecryption. The KMS signs the
     // cleartexts as fixed 32-byte words in handle order, and the contract now
     // rebuilds them the same way, so checkSignatures verifies.
     try {
@@ -218,15 +219,22 @@ async function processAuction(
     return out
   }
 
+  // ITEM (single-winner). Vickrey settles on the runner-up handle via
+  // finalizeSealedAuctionItem; first-price settles on the top bid via
+  // finalizeAuctionItem. Both decrypt (bidder, amount) and submit identically.
+  const fnName = a.useVickrey ? "finalizeSealedAuctionItem" : "finalizeAuctionItem"
   try {
     const inst = await getZama()
     const handleBidder = a.highestBidderHandle.toLowerCase() as `0x${string}`
-    const handleBid = a.highestBidHandle.toLowerCase() as `0x${string}`
+    // Vickrey pays the runner-up price (secondHighestBid); first-price pays the
+    // top bid (highestBid).
+    const handleAmount = (a.useVickrey ? a.secondHighestBidHandle : a.highestBidHandle)
+      .toLowerCase() as `0x${string}`
 
-    const r = await inst.publicDecrypt([handleBidder, handleBid])
+    const r = await inst.publicDecrypt([handleBidder, handleAmount])
 
     const winnerRaw = r.clearValues[handleBidder]
-    const amountRaw = r.clearValues[handleBid]
+    const amountRaw = r.clearValues[handleAmount]
     if (winnerRaw === undefined || amountRaw === undefined) {
       throw new Error("relayer returned no plaintext for ITEM handles")
     }
@@ -237,14 +245,14 @@ async function processAuction(
     const hash = await walletClient.writeContract({
       address: AUCTION_ADDRESS,
       abi: AUCTION_ABI,
-      functionName: "finalizeAuctionItem",
+      functionName: fnName,
       args: [id, winner, amountBig, r.decryptionProof],
       gas: 12_000_000n,
       account,
       chain: sepolia,
     })
     await publicClient.waitForTransactionReceipt({ hash })
-    out.push({ auctionId: id.toString(), action: "finalizeAuctionItem", tx: hash })
+    out.push({ auctionId: id.toString(), action: fnName, tx: hash })
   } catch (e) {
     const msg = (e as Error).message.slice(0, 300)
     // Common transient: relayer 404s because indexing is still pending. Mark
@@ -254,7 +262,7 @@ async function processAuction(
       auctionId: id.toString(),
       action: msg.includes("404") || msg.toLowerCase().includes("not found")
         ? "skip-pending-relayer"
-        : "finalizeAuctionItem",
+        : fnName,
       error: msg,
     })
   }

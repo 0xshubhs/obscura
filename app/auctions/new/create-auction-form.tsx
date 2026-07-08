@@ -5,11 +5,16 @@ import { useRouter } from "next/navigation"
 import { useAccount, usePublicClient, useReadContract, useWalletClient } from "wagmi"
 import { decodeEventLog, parseEther, formatEther, isAddress, type Address } from "viem"
 import { cn } from "@/lib/utils"
+import { ensureZamaInit, encryptInputs } from "@/lib/zama"
 import {
   AUCTION_ABI,
   AUCTION_ADDRESS,
   SCALE,
 } from "@/lib/zama-contracts"
+
+function handleToBytes32(h: bigint): `0x${string}` {
+  return `0x${h.toString(16).padStart(64, "0")}` as `0x${string}`
+}
 
 const DURATION_PRESETS = [
   { label: "5 min", seconds: 5 * 60 },
@@ -19,7 +24,10 @@ const DURATION_PRESETS = [
   { label: "24 hours", seconds: 24 * 60 * 60 },
 ]
 
-type Mode = "ITEM" | "TOKEN"
+// ITEM = public floor, first-price. SEALED = encrypted hidden reserve, with
+// optional Vickrey (second-price) settlement + FHE-random tie-break. TOKEN =
+// multi-unit uniform clearing price.
+type Mode = "ITEM" | "SEALED" | "TOKEN"
 
 export function CreateAuctionForm() {
   const router = useRouter()
@@ -35,6 +43,8 @@ export function CreateAuctionForm() {
   const [supply, setSupply] = useState("")
   const [durationSec, setDurationSec] = useState(DURATION_PRESETS[1].seconds)
   const [gasDeposit, setGasDeposit] = useState("0.005")
+  const [useVickrey, setUseVickrey] = useState(true)
+  const [useTieBreak, setUseTieBreak] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,7 +77,7 @@ export function CreateAuctionForm() {
   const minDepositWei = (minGasDeposit as bigint | undefined) ?? 0n
   const depositTooLow = minDepositWei > 0n && gasDepositWei < minDepositWei
 
-  const tokenAddressValid = mode === "ITEM" || (tokenAddress.length > 0 && isAddress(tokenAddress))
+  const tokenAddressValid = mode !== "TOKEN" || (tokenAddress.length > 0 && isAddress(tokenAddress))
 
   const canSubmit =
     isConnected &&
@@ -76,7 +86,8 @@ export function CreateAuctionForm() {
     durationSec >= 60 &&
     !submitting &&
     !depositTooLow &&
-    (mode === "ITEM" || (tokenAddressValid && supplyRaw > 0n))
+    (mode !== "TOKEN" || (tokenAddressValid && supplyRaw > 0n)) &&
+    (mode !== "SEALED" || minBidRaw > 0n)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -85,7 +96,34 @@ export function CreateAuctionForm() {
     setSubmitting(true)
     try {
       let hash: `0x${string}`
-      if (mode === "ITEM") {
+      if (mode === "SEALED") {
+        // Encrypt the reserve so the floor never appears in cleartext on-chain.
+        // The contract enforces it inside FHE; bidders never learn it.
+        await ensureZamaInit(publicClient as never, walletClient)
+        const enc = await encryptInputs(
+          [{ type: "uint64", value: minBidRaw }],
+          AUCTION_ADDRESS,
+          walletClient.account!.address,
+        )
+        hash = await walletClient.writeContract({
+          address: AUCTION_ADDRESS,
+          abi: AUCTION_ABI,
+          functionName: "createSealedAuctionItem",
+          args: [
+            itemName.trim(),
+            itemDescription.trim(),
+            0n, // displayHint — reserve is hidden, so show "—"
+            handleToBytes32(enc.handles[0]),
+            enc.inputProof,
+            BigInt(durationSec),
+            useVickrey,
+            useTieBreak,
+          ],
+          value: gasDepositWei,
+          account: walletClient.account!,
+          chain: walletClient.chain,
+        })
+      } else if (mode === "ITEM") {
         hash = await walletClient.writeContract({
           address: AUCTION_ADDRESS,
           abi: AUCTION_ABI,
@@ -172,7 +210,7 @@ export function CreateAuctionForm() {
           Auction mode
         </label>
         <div className="inline-flex items-center border border-border/40">
-          {(["ITEM", "TOKEN"] as const).map((m) => (
+          {(["ITEM", "SEALED", "TOKEN"] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -190,10 +228,50 @@ export function CreateAuctionForm() {
         </div>
         <p className="mt-2 font-mono text-[10px] text-muted-foreground/70">
           {mode === "ITEM"
-            ? "Single-item: highest bidder wins, pays their full bid."
-            : "Multi-unit token: uniform clearing price, supply allocated descending by bid."}
+            ? "Single-item: highest bidder wins, pays their full bid. Public floor."
+            : mode === "SEALED"
+              ? "Single-item with an ENCRYPTED reserve bidders never see. Optional second-price (Vickrey) settlement + FHE-random tie-break."
+              : "Multi-unit token: uniform clearing price, supply allocated descending by bid."}
         </p>
       </div>
+
+      {mode === "SEALED" && (
+        <div className="border border-purple-500/30 bg-purple-500/5 p-5 space-y-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-purple-400">
+            Sealed-auction options
+          </p>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useVickrey}
+              onChange={(e) => setUseVickrey(e.target.checked)}
+              className="mt-0.5 accent-purple-500"
+            />
+            <span className="font-mono text-[11px] text-foreground/90">
+              Vickrey (second-price)
+              <span className="block text-[10px] text-muted-foreground/70 mt-0.5">
+                Winner pays the runner-up&apos;s bid, not their own. Only the second price is
+                ever decrypted; the overbid is refunded in encrypted cUSDC.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useTieBreak}
+              onChange={(e) => setUseTieBreak(e.target.checked)}
+              className="mt-0.5 accent-purple-500"
+            />
+            <span className="font-mono text-[11px] text-foreground/90">
+              FHE-random tie-break
+              <span className="block text-[10px] text-muted-foreground/70 mt-0.5">
+                Equal top bids are broken by an on-chain <code>FHE.randEuint32</code> score
+                instead of first-come-wins (anti-MEV). Live-network only.
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       <div>
         <label className="block font-mono text-[10px] uppercase tracking-[0.3em] text-accent mb-3">
@@ -269,7 +347,11 @@ export function CreateAuctionForm() {
 
       <div>
         <label className="block font-mono text-[10px] uppercase tracking-[0.3em] text-accent mb-3">
-          {mode === "ITEM" ? "Floor (USDC, informational)" : "Minimum price per unit (USDC)"}
+          {mode === "ITEM"
+            ? "Floor (USDC, informational)"
+            : mode === "SEALED"
+              ? "Secret reserve (USDC, hidden)"
+              : "Minimum price per unit (USDC)"}
         </label>
         <input
           type="text"
@@ -280,7 +362,9 @@ export function CreateAuctionForm() {
           className="w-full bg-background border border-border/40 px-4 py-3 font-mono text-sm focus:outline-none focus:border-accent/60"
         />
         <p className="mt-2 font-mono text-[10px] text-muted-foreground/70">
-          Shown on the auction page for bidders — enforced on-chain via FHE.
+          {mode === "SEALED"
+            ? "Encrypted in your browser before it touches the chain. Bids at or below it are zeroed inside FHE and can never win — the reserve itself is never revealed."
+            : "Shown on the auction page for bidders — enforced on-chain via FHE."}
         </p>
       </div>
 

@@ -32,12 +32,13 @@ Obscura/
 │   │   ├── MockTokenX.sol       18-decimal generic ERC20 (TOKEN-mode auction asset)
 │   │   ├── Treasury.sol         Plaintext fee bps (cap 10%) + auth whitelist
 │   │   ├── ConfidentialUSDC.sol cUSDC: euint64 balances/allowances, two-step unwrap
-│   │   └── SilentBidAuction.sol Both modes; FHE running-max for ITEM + UCP for TOKEN
+│   │   └── Obscura.sol          Both modes; FHE running-max for ITEM + UCP for TOKEN
+│   │                            (+ opt-in sealed reserve / Vickrey second-price on ITEM)
 │   ├── test/
 │   │   ├── MockTokens.t.sol
 │   │   ├── Treasury.t.sol
 │   │   ├── ConfidentialUSDC.t.sol  uses forge-fhevm FhevmTest base
-│   │   └── SilentBidAuction.t.sol  e2e ITEM + TOKEN flows
+│   │   └── Obscura.t.sol           e2e ITEM + TOKEN + sealed/Vickrey flows
 │   ├── script/Deploy.s.sol      Deploy MockUSDC → MockTokenX → cUSDC → Treasury → Auction
 │   ├── foundry.toml
 │   └── remappings.txt
@@ -185,7 +186,7 @@ curl -X POST -H "Content-Type: application/json" \
 - TOKEN-mode finalize was previously blocked by a cleartext-encoding mismatch:
   the contract encoded the cleartexts as `abi.encode(uint256[])` (dynamic array)
   but the KMS signs positional `abi.encode(uint256, uint256, …)`. **Fixed** in
-  `_verifyTokenDecryption` (`contracts/src/SilentBidAuction.sol`) — it now builds
+  `_verifyTokenDecryption` (`contracts/src/Obscura.sol`) — it now builds
   the positional encoding via `bytes.concat`, mirroring `finalizeAuctionItem`.
   Verified by `forge test` (15/15), deployed to the current auction, and the
   keeper's TOKEN branch is re-enabled. (The manual finalize button remains as a
@@ -202,7 +203,7 @@ curl -X POST -H "Content-Type: application/json" \
 1. **UI** prompts for price + quantity in cUSDC and TokenX units
 2. **`@zama-fhe/relayer-sdk`** encrypts both as `euint64` against the auction contract's address — produces `{handles, inputProof}` from the relayer
 3. **UI** approves the encrypted cUSDC escrow (`cUSDC.approve(auction, encMaxAmount, proof)`)
-4. **UI** calls `SilentBidAuction.placeBid(id, encPriceHandle, encQtyHandle, inputProof)`
+4. **UI** calls `Obscura.placeBid(id, encPriceHandle, encQtyHandle, inputProof)`
 5. Contract pulls cUSDC via `cUSDC.transferFromAllowance(bidder, auction)` (encrypted, no leakage)
 6. Contract stores `Bid{ bidder, encPrice, encQty }` — only the FHE handles touch storage; the underlying values never decrypt during the auction
 
